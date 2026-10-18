@@ -48,7 +48,11 @@ public:
 	void stop_capture();
 	void start_playback();
 	void stop_playback();
+	// Playback runs at 16 kHz. write() takes 8 kHz audio (all modes) and
+	// upsamples it, write_wideband() takes 16 kHz audio as it is.
+	static const int OUTPUT_SAMPLE_RATE = 16000;
 	void write(int16_t *, size_t, float fade_from = 1.0f, float fade_to = 1.0f);
+	void write_wideband(int16_t *, size_t, float fade_from = 1.0f, float fade_to = 1.0f);
 	bool playback_drained();
 	void set_output_buffer_size(uint32_t b) { m_out->setBufferSize(b); }
 	void set_input_buffer_size(uint32_t b) { if(m_in != nullptr) m_in->setBufferSize(b); }
@@ -78,7 +82,8 @@ private:
 	bool m_agc;
 	float m_srm; // sample rate multiplier for macOS HACK
 
-	float m_audio_out_temp_buf[320];   //!< output of decoder
+	static const int MAX_OUT_SAMPLES = 640; // largest block process_audio() handles at once
+	float m_audio_out_temp_buf[MAX_OUT_SAMPLES];   //!< output of decoder
 	float *m_audio_out_temp_buf_p;
 
 	//float m_audio_out_float_buf[1120]; //!< output of upsampler - 1 frame of 160 samples upampled up to 7 times
@@ -97,6 +102,14 @@ private:
 
 	float m_aout_gain;
 	float m_volume;
+
+	// 8 kHz -> 16 kHz interpolation filter
+	static const int UP_TAPS = 101;
+	static const int UP_HIST = (UP_TAPS - 1) / 2;
+	float m_up_taps[UP_TAPS];
+	float m_up_hist[UP_HIST];
+	void upsample(const int16_t *in, size_t n, int16_t *out);
+	void write_block(int16_t *pcm, size_t s, float fade_from, float fade_to);
 
 private slots:
 	void input_data_received();

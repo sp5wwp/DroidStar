@@ -18,6 +18,7 @@
 #include "audioengine.h"
 #include <QDebug>
 #include <cmath>
+#include <cstring>
 
 #if defined (Q_OS_MACOS) || defined(Q_OS_IOS)
 #define MACHAK 1
@@ -38,6 +39,39 @@ AudioEngine::AudioEngine(QString in, QString out) :
 	m_aout_max_buf_idx = 0;
 	m_aout_gain = 100;
 	m_volume = 1.0f;
+
+	// Kaiser-windowed sinc low-pass at 16 kHz for the 8 kHz -> 16 kHz
+	// interpolator: flat to ~3.4 kHz, more than 70 dB down above 4.2 kHz,
+	// so no images of the 8 kHz signal appear in the 4-8 kHz band.
+	const double PI = 3.14159265358979323846;
+	const double fc = 3800.0 / 16000.0;
+	const double beta = 8.0;
+	auto bessel_i0 = [](double x) {
+		double sum = 1.0, term = 1.0;
+		for(int k = 1; k < 50; ++k){
+			const double t = x / (2.0 * k);
+			term *= t * t;
+			sum += term;
+			if(term < sum * 1e-12){
+				break;
+			}
+		}
+		return sum;
+	};
+	double h[UP_TAPS];
+	double sum = 0.0;
+	for(int n = 0; n < UP_TAPS; ++n){
+		const double x = n - UP_HIST;
+		const double sinc = (n == UP_HIST) ? 2.0 * fc : std::sin(2.0 * PI * fc * x) / (PI * x);
+		const double r = x / UP_HIST;
+		h[n] = sinc * bessel_i0(beta * std::sqrt(1.0 - r * r)) / bessel_i0(beta);
+		sum += h[n];
+	}
+	// Zero stuffing halves the level, so each polyphase branch needs gain 2
+	for(int n = 0; n < UP_TAPS; ++n){
+		m_up_taps[n] = (float)(2.0 * h[n] / sum);
+	}
+	memset(m_up_hist, 0, sizeof(m_up_hist));
 }
 
 AudioEngine::~AudioEngine()
@@ -71,6 +105,10 @@ void AudioEngine::init()
 	format.setChannelCount(1);
 	format.setSampleFormat(QAudioFormat::Int16);
 
+	// Playback at 16 kHz (wideband decoders), capture stays at 8 kHz
+	QAudioFormat outformat = format;
+	outformat.setSampleRate(OUTPUT_SAMPLE_RATE);
+
 	m_agc = true;
 
 	QList<QAudioDevice> devices = QMediaDevices::audioOutputs();
@@ -92,20 +130,20 @@ void AudioEngine::init()
 				device = *it;
 			}
 		}
-		if (!device.isFormatSupported(format)) {
+		if (!device.isFormatSupported(outformat)) {
             qWarning() << "Current audio format not supported by playback device";
         }
 
-        qDebug() << "Playback device: " << device.description() << "SR: " << format.sampleRate();
+        qDebug() << "Playback device: " << device.description() << "SR: " << outformat.sampleRate();
 
         try{
-            m_out = new QAudioSink(device, format, this);
+            m_out = new QAudioSink(device, outformat, this);
         }
         catch (const std::exception& e) {
             qDebug() << "Exception in constructor:" << e.what();
         }
 
-		m_out->setBufferSize(1280);
+		m_out->setBufferSize(2560); // 80 ms at 16 kHz
 		connect(m_out, SIGNAL(stateChanged(QAudio::State)), this, SLOT(handleStateChanged(QAudio::State)));
 	}
 
@@ -165,6 +203,7 @@ void AudioEngine::start_playback()
 	if (m_out) {
 		// Only start if stopped or suspended - IdleState and ActiveState mean already started
 		if (m_out->state() == QAudio::StoppedState || m_out->state() == QAudio::SuspendedState) {
+			memset(m_up_hist, 0, sizeof(m_up_hist));
 			m_outdev = m_out->start();
 		}
 	}
@@ -172,6 +211,7 @@ void AudioEngine::start_playback()
 
 void AudioEngine::stop_playback()
 {
+	memset(m_up_hist, 0, sizeof(m_up_hist));
 	if (m_out) {
 		//m_outdev->reset();
 		m_out->reset();
@@ -217,9 +257,66 @@ bool AudioEngine::playback_drained()
 	return m_out->bytesFree() >= m_out->bufferSize();
 }
 
+void AudioEngine::upsample(const int16_t *in, size_t n, int16_t *out)
+{
+	// x = filter history followed by the new samples
+	float x[UP_HIST + MAX_OUT_SAMPLES / 2];
+	memcpy(x, m_up_hist, sizeof(m_up_hist));
+	for(size_t i = 0; i < n; ++i){
+		x[UP_HIST + i] = in[i];
+	}
+
+	for(size_t i = 0; i < n; ++i){
+		const float *p = x + UP_HIST + i; // p[-k] is input sample i-k
+		float even = 0.0f, odd = 0.0f;
+		for(int k = 0; k <= UP_HIST; ++k){
+			even += m_up_taps[2 * k] * p[-k];
+		}
+		for(int k = 0; k < UP_HIST; ++k){
+			odd += m_up_taps[2 * k + 1] * p[-k];
+		}
+		for(int j = 0; j < 2; ++j){
+			float v = std::floor(0.5f + (j ? odd : even));
+			if(v > 32767.0f) v = 32767.0f;
+			if(v < -32767.0f) v = -32767.0f;
+			out[2 * i + j] = (int16_t)v;
+		}
+	}
+
+	memcpy(m_up_hist, x + n, sizeof(m_up_hist));
+}
+
 void AudioEngine::write(int16_t *pcm, size_t s, float fade_from, float fade_to)
 {
+	// 8 kHz input: upsample to the 16 kHz output in blocks process_audio() can take
+	const size_t max_in = MAX_OUT_SAMPLES / 2;
+	int16_t wide[MAX_OUT_SAMPLES];
 	m_maxlevel = 0;
+	for(size_t a = 0; a < s; a += max_in){
+		const size_t n = (s - a < max_in) ? (s - a) : max_in;
+		upsample(pcm + a, n, wide);
+		const float f0 = fade_from + (fade_to - fade_from) * (float)a / (float)s;
+		const float f1 = fade_from + (fade_to - fade_from) * (float)(a + n) / (float)s;
+		write_block(wide, 2 * n, f0, f1);
+	}
+}
+
+void AudioEngine::write_wideband(int16_t *pcm, size_t s, float fade_from, float fade_to)
+{
+	// 16 kHz input goes straight out. Forget the interpolator history, so
+	// switching back to 8 kHz audio does not replay old samples.
+	memset(m_up_hist, 0, sizeof(m_up_hist));
+	m_maxlevel = 0;
+	for(size_t a = 0; a < s; a += MAX_OUT_SAMPLES){
+		const size_t n = (s - a < (size_t)MAX_OUT_SAMPLES) ? (s - a) : (size_t)MAX_OUT_SAMPLES;
+		const float f0 = fade_from + (fade_to - fade_from) * (float)a / (float)s;
+		const float f1 = fade_from + (fade_to - fade_from) * (float)(a + n) / (float)s;
+		write_block(pcm + a, n, f0, f1);
+	}
+}
+
+void AudioEngine::write_block(int16_t *pcm, size_t s, float fade_from, float fade_to)
+{
 /*
 	fprintf(stderr, "AUDIOOUT: ");
 	for(int i = 0; i < s; ++i){

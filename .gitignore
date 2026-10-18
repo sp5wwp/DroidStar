@@ -1,2 +1,23 @@
+# Build directories (build/, build-android/, build-release/, ...)
 build/
+build-*/
+
+# Android packages and signing keys
+*.apk
+*.aab
+*.idsig
+*.keystore
+*.jks
+
+# Leftovers from git apply / patch
+*.orig
+*.rej
+
+# IDEs and tooling
 .vscode/
+.idea/
+.qtcreator/
+CMakeLists.txt.user*
+CMakeUserPresets.json
+compile_commands.json
+.cache/

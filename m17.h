@@ -25,6 +25,9 @@
 #else
 #include "codec2/codec2_api.h"
 #endif
+#ifdef USE_C2_NEURAL
+#include "c2neural.h"
+#endif
 
 class M17 : public Mode
 {
@@ -34,7 +37,9 @@ public:
 	~M17();
 	static void encode_callsign(uint8_t *);
 	static void decode_callsign(uint8_t *);
-	void decode_c2(int16_t *, uint8_t *);
+	// Returns the sample rate of the decoded audio: 16000 from the neural
+	// decoder (320 samples), otherwise 8000 (160 or 320 samples).
+	int decode_c2(int16_t *, uint8_t *);
 	void encode_c2(int16_t *, uint8_t *);
 	void set_mode(bool);
 	bool get_mode();
@@ -69,6 +74,10 @@ private slots:
 private:
 	int m_txrate;
 	uint8_t m_txcan;
+#ifdef USE_C2_NEURAL
+	C2Neural *m_c2f = nullptr;
+#endif
+	bool m_c2f_reset = true; // restart the neural decoder on its next frame
 };
 
 #endif // M17_H

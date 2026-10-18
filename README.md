@@ -76,6 +76,15 @@ If building an an arm based platform like rpi or using dynarmic on x64/arm64, th
 This requires the md380_vocoder library to be installed: https://github.com/nostar/md380_vocoder
 You must make sure that you are not in violation of any patent laws in your area if you decide to use this.
 
+## Neural Codec2 decoder
+By default DroidStar is built with the neural (FARGAN) Codec2 3200 decoder from https://github.com/M17-Project/Codec2-mod-neural . It decodes the ordinary M17 3200 bps voice stream with a neural vocoder instead of the classic sinusoidal synthesis, and only changes what you hear on receive; nothing changes on transmit. Its output is 16 kHz wideband audio, and the audio output runs at 16 kHz for all modes (8 kHz decoders are upsampled). It is off by default and can be turned on with the "Neural Codec2 decoder (M17 3200)" checkbox in Settings, also during a stream. 1600 bps Voice/Data streams always use the classic decoder.
+
+CMake downloads Codec2-mod and Codec2-mod-neural during configuration. To use local checkouts instead:
+```
+cmake .. -DFETCHCONTENT_SOURCE_DIR_CODEC2_MOD=/path/to/Codec2-mod -DFETCHCONTENT_SOURCE_DIR_CODEC2_MOD_NEURAL=/path/to/Codec2-mod-neural
+```
+On x86-64 the neural network is compiled with AVX2/FMA. For builds that must run on CPUs older than Intel Haswell or AMD Excavator, add `-DC2F_AVX2=OFF`. To leave the neural decoder out completely, add `-DUSE_C2_NEURAL=OFF`.
+
 My primary development platform is Fedora Linux.  With a proper build environment, the build instructions apply to all other platforms/distributions, including Windows and macOS.
 
 All of the gradle build files are provided to create an APK file ready to be installed on an Android device.  A proper Android build system including the Android NDK is required and beyond the scope of this document.

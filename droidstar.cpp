@@ -444,6 +444,7 @@ void DroidStar::process_connect()
 		connect(this, SIGNAL(rptr2_changed(QString)), m_mode, SLOT(rptr2_changed(QString)));
 		connect(this, SIGNAL(usrtxt_changed(QString)), m_mode, SLOT(usrtxt_changed(QString)));
         connect(this, SIGNAL(debug_changed(bool)), m_mode, SLOT(debug_changed(bool)));
+		connect(this, SIGNAL(c2neural_changed(bool)), m_mode, SLOT(c2neural_changed(bool)));
 		// Allow modes to request the main app to toggle the connect button (simulate user)
 		connect(m_mode, SIGNAL(request_connect_toggle()), this, SLOT(process_connect()));
 		connect(m_mode, SIGNAL(request_reconnect(int)), this, SLOT(schedule_reconnect(int)));
@@ -454,6 +455,7 @@ void DroidStar::process_connect()
 		emit rptr1_changed(m_rptr1);
 		emit rptr2_changed(m_rptr2);
 		emit usrtxt_changed(m_dstarusertxt);
+		emit c2neural_changed(m_c2neural);
 
 		if(m_protocol == "DMR"){
 			QString dmrpass = sl.at(2).simplified();
@@ -630,6 +632,7 @@ void DroidStar::save_settings()
 	//m_settings->setValue("PLAYBACK", ui->comboPlayback->currentText());
 	//m_settings->setValue("CAPTURE", ui->comboCapture->currentText());
 	m_settings->setValue("IPV6", m_ipv6 ? "true" : "false");
+	m_settings->setValue("C2NEURAL", m_c2neural ? "true" : "false");
 	m_settings->setValue("MODE", m_protocol);
 	m_settings->setValue("REFHOST", m_saved_refhost);
 	m_settings->setValue("DCSHOST", m_saved_dcshost);
@@ -693,6 +696,7 @@ void DroidStar::save_settings()
 void DroidStar::process_settings()
 {
 	m_ipv6 = (m_settings->value("IPV6").toString().simplified() == "true") ? true : false;
+	m_c2neural = (m_settings->value("C2NEURAL").toString().simplified() == "true") ? true : false;
 	process_mode_change(m_settings->value("MODE").toString().simplified());
 	m_saved_refhost = m_settings->value("REFHOST").toString().simplified();
 	m_saved_dcshost =m_settings->value("DCSHOST").toString().simplified();

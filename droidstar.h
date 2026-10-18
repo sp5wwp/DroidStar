@@ -63,6 +63,7 @@ signals:
 	void usrtxt_changed(QString);
     void dst_changed(QString);
     void debug_changed(bool);
+	void c2neural_changed(bool);
     void update_devices();
 public slots:
 	void set_callsign(const QString &callsign) {  m_callsign = callsign.simplified(); save_settings(); }
@@ -107,6 +108,7 @@ public slots:
 	void set_toggletx(bool x) { m_toggletx = x; save_settings(); }
 	void set_xrf2ref(bool x) { m_xrf2ref = x; save_settings(); }
 	void set_ipv6(bool ipv6) { m_ipv6 = ipv6; save_settings(); }
+	void set_c2neural(bool n) { m_c2neural = n; save_settings(); emit c2neural_changed(n); }
 	void set_vocoder(QString vocoder) { m_vocoder = vocoder; }
 	void set_modem(QString modem) { m_modem = modem; }
 	void set_playback(QString playback) { m_playback = playback; }
@@ -208,6 +210,12 @@ public slots:
 	QString get_error_text() { return m_errortxt; }
 	bool get_toggletx() { return m_toggletx; }
 	bool get_ipv6() { return m_ipv6; }
+	bool get_c2neural() { return m_c2neural; }
+#ifdef USE_C2_NEURAL
+	bool get_c2neural_available() { return true; }
+#else
+	bool get_c2neural_available() { return false; }
+#endif
 	bool get_xrf2ref() { return m_xrf2ref; }
 	QString get_local_hosts(){ return m_localhosts; }
 	QStringList get_vocoders() { return m_vocoders; }
@@ -335,6 +343,7 @@ private:
 	QString m_errortxt;
 	bool m_xrf2ref;
 	bool m_ipv6;
+	bool m_c2neural = false;
 	QString m_vocoder;
 	QString m_modem;
 	QString m_playback;

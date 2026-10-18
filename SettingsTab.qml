@@ -45,6 +45,7 @@ Item {
 	property alias toggleTX: toggletx
 	property alias xrf2ref: xrf2Ref
 	property alias ipv6: ipV6
+	property alias c2neural: c2Neural
 	property alias comboVocoder: _comboVocoder
 	property alias comboModem: _comboModem
 	property alias comboPlayback: _comboPlayback
@@ -636,10 +637,23 @@ Item {
 			spacing: 1
 			text: qsTr("Use IPv6 when available")
 		}
+		CheckBox {
+			id: c2Neural
+			x: 10
+			y: 870
+			//width: 100
+			height: 25
+			spacing: 1
+			enabled: droidstar.get_c2neural_available()
+			text: enabled ? qsTr("Neural Codec2 decoder (M17 3200)") : qsTr("Neural Codec2 decoder (not built)")
+			onClicked:{
+				droidstar.set_c2neural(c2Neural.checked);
+			}
+		}
 		Text {
 			id: _modemRXFreqLabel
 			x: 10
-			y: 870
+			y: 900
 			width: 60
 			height: 25
 			text: qsTr("RX Freq")
@@ -677,7 +691,7 @@ Item {
 		Text {
 			id: _modemRXOffsetLabel
 			x: 10
-			y: 900
+			y: 930
 			width: 100
 			height: 25
 			text: qsTr("RX Offset")
@@ -715,7 +729,7 @@ Item {
 		Text {
 			id: _modemRXLevelLabel
 			x: 10
-			y: 930
+			y: 960
 			width: 100
 			height: 25
 			text: qsTr("RX Level")
@@ -753,7 +767,7 @@ Item {
 		Text {
 			id: _modemRXDCOffsetLabel
 			x: 10
-			y: 960
+			y: 990
 			width: 100
 			height: 25
 			text: qsTr("RX DC Offset")
@@ -791,7 +805,7 @@ Item {
 		Text {
 			id: _modemRFLevelLabel
 			x: 10
-			y: 990
+			y: 1020
 			width: 100
 			height: 25
 			text: qsTr("RF Level")
@@ -829,7 +843,7 @@ Item {
 		Text {
 			id: _modemCWIdTXLevelLabel
 			x: 10
-			y: 1020
+			y: 1050
 			width: 100
 			height: 25
 			text: qsTr("CWIdTXLevel")
@@ -867,7 +881,7 @@ Item {
 		Text {
 			id: _modemDMRTXLevelLabel
 			x: 10
-			y: 1050
+			y: 1080
 			width: 100
 			height: 25
 			text: qsTr("DMRTXLevel")
@@ -905,7 +919,7 @@ Item {
 		Text {
 			id: _modemP25TXLevelLabel
 			x: 10
-			y: 1070
+			y: 1100
 			width: 100
 			height: 25
 			text: qsTr("P25TXLevel")
@@ -943,7 +957,7 @@ Item {
 		Text {
 			id: _modemBaudLabel
 			x: 10
-			y: 1100
+			y: 1130
 			width: 100
 			height: 25
 			text: qsTr("Baud")
@@ -962,7 +976,7 @@ Item {
         CheckBox {
             id: _mmdvmBox
             x: 10
-			y: 1130
+			y: 1160
             width: parent.width
             height: 25
             text: qsTr("MMDVM_DIRECT")
@@ -973,7 +987,7 @@ Item {
         CheckBox {
             id: _debugBox
             x: 10
-			y: 1160
+			y: 1190
             width: parent.width
             height: 25
             text: qsTr("Debug output to stderr")

@@ -167,6 +167,8 @@ protected slots:
     void dst_changed(QString dst){ m_refname = dst; }
     void host_lookup();
     void debug_changed(bool debug){ m_debug = debug; }
+	// Use the neural (FARGAN) Codec2 3200 decoder instead of the classic one
+	void c2neural_changed(bool n){ m_c2neural = n; }
 protected:
     QString m_mode;
 	QUdpSocket *m_udp = nullptr;
@@ -247,6 +249,7 @@ protected:
 	float m_fmTXLevel;
 	float m_m17TXLevel;
 	bool m_debug;
+	bool m_c2neural = false;
 	bool m_useCOSAsLockout;
 	bool m_dstarEnabled;
 	bool m_dmrEnabled;

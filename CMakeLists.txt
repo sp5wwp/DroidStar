@@ -188,6 +188,42 @@ else()
     )
 endif()
 
+# Optional neural (FARGAN) decoder for M17 Codec2 3200 voice, selectable at
+# runtime in Settings. It needs Codec2-mod and Codec2-mod-neural, which are
+# downloaded at configure time. To build from local checkouts instead, pass
+# -DFETCHCONTENT_SOURCE_DIR_CODEC2_MOD=/path/to/Codec2-mod and
+# -DFETCHCONTENT_SOURCE_DIR_CODEC2_MOD_NEURAL=/path/to/Codec2-mod-neural
+# On x86-64 the network is built with AVX2/FMA by default (C2F_AVX2); set
+# -DC2F_AVX2=OFF for builds that must run on CPUs older than Haswell.
+option(USE_C2_NEURAL "Build the neural Codec2 3200 decoder (Codec2-mod-neural)" ON)
+if(USE_C2_NEURAL)
+    include(FetchContent)
+    FetchContent_Declare(codec2_mod
+        GIT_REPOSITORY https://github.com/M17-Project/Codec2-mod.git
+        GIT_TAG 7c334283794fa6304dc014f12df70afc8393143a
+    )
+    FetchContent_Declare(codec2_mod_neural
+        GIT_REPOSITORY https://github.com/M17-Project/Codec2-mod-neural.git
+        GIT_TAG 1c32682ebff7a853eb3767866140b0481f54cd27
+    )
+    # Codec2-mod has no CMakeLists.txt, so this only downloads it;
+    # Codec2-mod-neural builds it as the codec2_mod static library.
+    FetchContent_MakeAvailable(codec2_mod)
+    set(C2MOD_DIR "${codec2_mod_SOURCE_DIR}" CACHE PATH "Codec2-mod source directory" FORCE)
+    set(C2F_TOOLS OFF CACHE BOOL "build the Codec2-mod-neural command line tools" FORCE)
+    FetchContent_MakeAvailable(codec2_mod_neural)
+
+    target_sources(DroidStar PRIVATE
+        c2neural.cpp c2neural.h
+    )
+    target_compile_definitions(DroidStar PRIVATE
+        USE_C2_NEURAL
+    )
+    target_link_libraries(DroidStar PRIVATE
+        c2fargan
+    )
+endif()
+
 if(FALSE) # set TRUE for flite
     target_compile_definitions(DroidStar PRIVATE
         USE_FLITE
@@ -204,7 +240,7 @@ if(FALSE) # set TRUE for flite
     )
 endif()
 
-if(TRUE) # set TRUE for md380_vocoder
+if(FALSE) # set TRUE for md380_vocoder
     target_compile_definitions(DroidStar PRIVATE
         USE_MD380_VOCODER
     )

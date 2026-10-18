@@ -97,6 +97,9 @@ M17::M17() :
 
 M17::~M17()
 {
+#ifdef USE_C2_NEURAL
+	delete m_c2f;
+#endif
 }
 
 void M17::encode_callsign(uint8_t *callsign)
@@ -191,8 +194,33 @@ bool M17::get_mode()
 #endif
 	return m;
 }
-void M17::decode_c2(int16_t *audio, uint8_t *c)
+int M17::decode_c2(int16_t *audio, uint8_t *c)
 {
+#ifdef USE_C2_NEURAL
+	// The neural decoder only handles 3200 bps voice; 1600 bps V/D streams
+	// always use the classic decoder.
+	if(m_c2neural && get_mode()){
+		if(!m_c2f){
+#ifdef USE_EXTERNAL_CODEC2
+			m_c2f = new C2Neural(1.0f);
+#else
+			m_c2f = new C2Neural(3.0f); // same output gain as CCodec2::codec2_decode()
+#endif
+			if(!m_c2f->valid()){
+				qDebug() << "M17: neural Codec2 decoder could not be created, using the classic decoder";
+			}
+		}
+		if(m_c2f->valid()){
+			if(m_c2f_reset){
+				m_c2f->reset();
+				m_c2f_reset = false;
+			}
+			m_c2f->decode(audio, c);
+			return C2Neural::OUT_SAMPLE_RATE;
+		}
+	}
+#endif
+	m_c2f_reset = true;
 #ifdef USE_EXTERNAL_CODEC2
 	if(m_c2){
 		codec2_decode(m_c2, audio, c);
@@ -200,6 +228,7 @@ void M17::decode_c2(int16_t *audio, uint8_t *c)
 #else
 	m_c2->codec2_decode(audio, c);
 #endif
+	return 8000;
 }
 
 void M17::encode_c2(int16_t *audio, uint8_t *c)
@@ -290,6 +319,7 @@ void M17::process_udp()
 			m_modeinfo.dst = QString((char *)cs);
 			m_modeinfo.streamid = streamid;
 			m_rxcodecq.clear(); // drop leftovers of an earlier, interrupted stream
+			m_c2f_reset = true;
 			m_audio->start_playback();
 
 			if((buf.data()[19] & 0x06U) == 0x04U){
@@ -660,6 +690,7 @@ void M17::process_modem_data(QByteArray d)
 				m_modeinfo.ts = QDateTime::currentMSecsSinceEpoch();
 				qDebug() << "New RF stream from " << m_modeinfo.src << " to " << m_modeinfo.dst << " id == " << QString::number(m_modeinfo.streamid, 16) << "FN == " << fn << " ber == " << ber;
 
+				m_c2f_reset = true;
 				m_audio->start_playback();
 
 				if(!m_rxtimer->isActive()){
@@ -1062,9 +1093,13 @@ void M17::process_rx_data()
 		for(int i = 0; i < 8; ++i){
 			codec2[i] = m_rxcodecq.dequeue();
 		}
-		decode_c2(pcm, codec2);
-		int s = get_mode() ? 160 : 320;
-		m_audio->write(pcm, s, fade_from, fade_to);
+		if(decode_c2(pcm, codec2) == 16000){
+			m_audio->write_wideband(pcm, 320, fade_from, fade_to);
+		}
+		else{
+			int s = get_mode() ? 160 : 320;
+			m_audio->write(pcm, s, fade_from, fade_to);
+		}
 		emit update_output_level(m_audio->level());
 		drain_cnt = 0;
 	}
@@ -1081,6 +1116,7 @@ void M17::process_rx_data()
 		m_modeinfo.streamid = 0;
 		m_rxcodecq.clear();
 		m_rxmodemq.clear();
+		m_c2f_reset = true;
 		qDebug() << "M17 playback stopped";
 		m_modeinfo.stream_state = STREAM_IDLE;
 		return;

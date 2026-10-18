@@ -383,6 +383,7 @@ ApplicationWindow {
 			//console.log("update_settings comboHost == ", mainTab.comboHost.find(droidstar.get_host()));
 			//console.log("update_settings comboModule == ", mainTab.comboModule.find(droidstar.get_module()));
 			settingsTab.ipv6.checked = droidstar.get_ipv6();
+			settingsTab.c2neural.checked = droidstar.get_c2neural();
 			settingsTab.xrf2ref.checked = droidstar.get_xrf2ref();
 			settingsTab.toggleTX.checked = droidstar.get_toggletx();
 			if(droidstar.get_mode() === "REF"){
